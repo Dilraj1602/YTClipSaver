@@ -1,47 +1,40 @@
 {
-  "name": "YTClipSaver - YouTube Bookmark Manager",
-  "version": "1.0",
-  "description": "Save and manage timestamps in YouTube videos with custom descriptions, search, and keyboard shortcuts",
   "manifest_version": 3,
-
-  "permissions": ["storage", "tabs"],
-  "host_permissions": ["https://www.youtube.com/*"],
-
+  "name": "YTClipSaver - YouTube Bookmark Manager",
+  "description": "Bookmark and manage timestamps in YouTube videos with search, filter, and keyboard shortcuts",
+  "version": "1.0",
+  "permissions": [
+    "storage",
+    "tabs",
+    "scripting",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "*://*.youtube.com/*"
+  ],
   "background": {
-    "service_worker": "background.js",
-    "type": "module"
+    "service_worker": "background.js"
   },
-
   "content_scripts": [
     {
-      "matches": ["https://www.youtube.com/*"],
-      "js": ["contentScript.js"]
+      "matches": ["*://*.youtube.com/*"],
+      "js": ["contentScript.js"],
+      "run_at": "document_idle",
+      "all_frames": false
     }
   ],
-
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "YTClipSaver - Manage YouTube Bookmarks"
+  },
   "web_accessible_resources": [
     {
       "resources": [
-        "assets/bookmark.png",
-        "assets/play.png",
-        "assets/delete.png",
-        "assets/edit.png",
-        "assets/save.png"
+        "assets/*"
       ],
-      "matches": ["https://www.youtube.com/*"]
+      "matches": ["*://*.youtube.com/*"]
     }
   ],
-
-  "action": {
-    "default_icon": {
-      "16": "assets/ext-icon.png",
-      "24": "assets/ext-icon.png",
-      "32": "assets/ext-icon.png"
-    },
-    "default_title": "YouTube Bookmarks - Click to view your saved timestamps",
-    "default_popup": "popup.html"
-  },
-
   "icons": {
     "16": "assets/ext-icon.png",
     "48": "assets/ext-icon.png",

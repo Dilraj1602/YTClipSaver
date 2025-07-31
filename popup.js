@@ -1,4 +1,13 @@
-import { getCurrentTab } from "./utils.js";
+// Utility function to get current active tab
+const getCurrentTab = async () => {
+    try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        return tab;
+    } catch (error) {
+        console.error('Error getting current tab:', error);
+        throw error;
+    }
+};
 
 // Global variables for state management
 let currentBookmarks = [];
@@ -329,9 +338,34 @@ const addNewBookmark = (bookmarksElement, bookmark) => {
 // Play bookmark
 const onPlay = async (bookmarkTime) => {
     try {
+        console.log('=== PLAY BUTTON CLICKED ===');
+        console.log('Playing bookmark at time:', bookmarkTime);
         const activeTab = await getCurrentTab();
-        chrome.tabs.sendMessage(activeTab.id, { type: "PLAY", value: bookmarkTime });
-        window.close(); // Close popup after playing
+        console.log('Active tab:', activeTab);
+        
+        if (!activeTab || !activeTab.id) {
+            console.error('No active tab found');
+            showError('No active tab found');
+            return;
+        }
+        
+        console.log('Sending PLAY message to content script...');
+        chrome.tabs.sendMessage(activeTab.id, { 
+            type: "PLAY", 
+            value: parseFloat(bookmarkTime) 
+        }, (response) => {
+            console.log('Play response received:', response);
+            if (chrome.runtime.lastError) {
+                console.error('Error sending play message:', chrome.runtime.lastError);
+                showError('Failed to play bookmark - make sure you are on a YouTube video page');
+            } else if (response && response.success) {
+                console.log('Play message sent successfully');
+                window.close(); // Close popup after playing
+            } else {
+                console.error('Play failed:', response);
+                showError('Failed to play bookmark - video player not found');
+            }
+        });
     } catch (error) {
         console.error('Error playing bookmark:', error);
         showError('Failed to play bookmark');
@@ -341,7 +375,16 @@ const onPlay = async (bookmarkTime) => {
 // Delete bookmark
 const onDelete = async (bookmarkTime) => {
     try {
+        console.log('=== DELETE BUTTON CLICKED ===');
+        console.log('Deleting bookmark at time:', bookmarkTime);
         const activeTab = await getCurrentTab();
+        console.log('Active tab:', activeTab);
+        
+        if (!activeTab || !activeTab.id) {
+            console.error('No active tab found');
+            showError('No active tab found');
+            return;
+        }
         
         // Remove from UI immediately
         const bookmarkElement = document.getElementById("bookmark-" + bookmarkTime);
@@ -349,12 +392,22 @@ const onDelete = async (bookmarkTime) => {
             bookmarkElement.remove();
         }
 
+        console.log('Sending DELETE message to content script...');
         // Remove from storage
         chrome.tabs.sendMessage(activeTab.id, {
             type: "DELETE",
-            value: bookmarkTime,
+            value: parseFloat(bookmarkTime),
         }, (response) => {
-            if (response) {
+            console.log('Delete response received:', response);
+            if (chrome.runtime.lastError) {
+                console.error('Error sending delete message:', chrome.runtime.lastError);
+                showError('Failed to delete bookmark - make sure you are on a YouTube video page');
+                // Re-add the element if deletion failed
+                if (bookmarkElement) {
+                    bookmarksContainer.appendChild(bookmarkElement);
+                }
+            } else if (response) {
+                console.log('Delete successful, updating bookmarks');
                 currentBookmarks = response;
                 filteredBookmarks = [...currentBookmarks];
                 updateVideoInfo();
@@ -370,11 +423,15 @@ const onDelete = async (bookmarkTime) => {
 // Edit bookmark
 const onEdit = (bookmark) => {
     try {
+        console.log('=== EDIT BUTTON CLICKED ===');
+        console.log('Editing bookmark:', bookmark);
         const newDescription = prompt('Edit bookmark description:', bookmark.desc);
+        
         if (newDescription !== null && newDescription.trim() !== '') {
             bookmark.desc = newDescription.trim();
             bookmark.timestamp = Date.now(); // Update timestamp
             
+            console.log('Updated bookmark:', bookmark);
             // Update in storage
             updateBookmarkInStorage(bookmark);
         }
@@ -387,16 +444,30 @@ const onEdit = (bookmark) => {
 // Update bookmark in storage
 const updateBookmarkInStorage = async (updatedBookmark) => {
     try {
+        console.log('Updating bookmark in storage:', updatedBookmark);
         const activeTab = await getCurrentTab();
+        
+        if (!activeTab || !activeTab.url.includes("youtube.com/watch")) {
+            showError('Not on a YouTube video page');
+            return;
+        }
+        
         const queryParameters = activeTab.url.split("?")[1];
         const urlParameters = new URLSearchParams(queryParameters);
         const currentVideo = urlParameters.get("v");
+
+        if (!currentVideo) {
+            showError('Could not get video ID');
+            return;
+        }
 
         // Update local array
         const index = currentBookmarks.findIndex(b => b.time === updatedBookmark.time);
         if (index !== -1) {
             currentBookmarks[index] = updatedBookmark;
             filteredBookmarks = [...currentBookmarks];
+            
+            console.log('Saving updated bookmarks:', currentBookmarks);
             
             // Update storage
             chrome.storage.sync.set({
@@ -406,10 +477,14 @@ const updateBookmarkInStorage = async (updatedBookmark) => {
                     console.error('Storage error:', chrome.runtime.lastError);
                     showError('Failed to save changes');
                 } else {
+                    console.log('Bookmark updated successfully');
                     updateVideoInfo();
                     filterAndRenderBookmarks();
                 }
             });
+        } else {
+            console.error('Bookmark not found in local array');
+            showError('Bookmark not found');
         }
     } catch (error) {
         console.error('Error updating bookmark in storage:', error);
@@ -479,6 +554,70 @@ const showNotYouTubePage = () => {
     } catch (error) {
         console.error('Error showing not YouTube page message:', error);
     }
+};
+
+// Debug function to test functionality
+const debugExtension = async () => {
+    try {
+        console.log('=== DEBUGGING EXTENSION ===');
+        const activeTab = await getCurrentTab();
+        console.log('Active tab:', activeTab);
+        
+        if (activeTab && activeTab.url.includes("youtube.com/watch")) {
+            console.log('On YouTube video page');
+            
+            // Test getting video data
+            chrome.tabs.sendMessage(activeTab.id, { type: "GET_VIDEO_DATA" }, (response) => {
+                console.log('Video data response:', response);
+            });
+            
+            // Test storage
+            const queryParameters = activeTab.url.split("?")[1];
+            const urlParameters = new URLSearchParams(queryParameters);
+            const currentVideo = urlParameters.get("v");
+            console.log('Current video ID:', currentVideo);
+            
+            chrome.storage.sync.get([currentVideo], (data) => {
+                console.log('Storage data:', data);
+            });
+        } else {
+            console.log('Not on YouTube video page');
+        }
+    } catch (error) {
+        console.error('Debug error:', error);
+    }
+};
+
+// Add debug function to window for testing
+window.debugExtension = debugExtension;
+
+// Test function for button functionality
+window.testButtonFunctionality = () => {
+    console.log('=== TESTING BUTTON FUNCTIONALITY ===');
+    
+    // Test if buttons exist
+    const playButtons = document.querySelectorAll('.play-btn');
+    const editButtons = document.querySelectorAll('.edit-btn');
+    const deleteButtons = document.querySelectorAll('.delete-btn');
+    
+    console.log('Play buttons found:', playButtons.length);
+    console.log('Edit buttons found:', editButtons.length);
+    console.log('Delete buttons found:', deleteButtons.length);
+    
+    // Test if buttons are clickable
+    playButtons.forEach((btn, index) => {
+        console.log(`Play button ${index}:`, {
+            exists: !!btn,
+            clickable: btn.style.pointerEvents !== 'none',
+            visible: btn.offsetParent !== null
+        });
+    });
+    
+    return {
+        playButtons: playButtons.length,
+        editButtons: editButtons.length,
+        deleteButtons: deleteButtons.length
+    };
 };
 
 // Initialize popup when DOM is loaded

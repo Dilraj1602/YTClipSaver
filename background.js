@@ -1,61 +1,116 @@
-// Background script for YouTube Bookmark Extension
-// Handles tab updates and communicates with content scripts
+// Background service worker for YTClipSaver extension
+let currentVideoId = "";
 
-// Listen for tab updates to detect YouTube video pages
-chrome.tabs.onUpdated.addListener((tabId, tab) => {
+// Listen for tab updates to detect YouTube video navigation
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     try {
-        // Check if the tab URL is a YouTube video page
+        // Only process if the tab is complete and on YouTube
+        if (changeInfo.status === 'complete' && tab.url && tab.url.includes("youtube.com/watch")) {
+            console.log('YouTube video page detected:', tab.url);
+            
+            // Extract video ID from URL
+            const urlParams = new URLSearchParams(tab.url.split("?")[1]);
+            const videoId = urlParams.get("v");
+            
+            if (videoId && videoId !== currentVideoId) {
+                console.log('New video detected:', videoId);
+                currentVideoId = videoId;
+                
+                // Send message to content script to initialize
+                chrome.tabs.sendMessage(tabId, {
+                    type: "NEW",
+                    videoId: videoId
+                }).catch(error => {
+                    console.log('Content script not ready yet, will retry...');
+                    // Retry after a short delay
+                    setTimeout(() => {
+                        chrome.tabs.sendMessage(tabId, {
+                            type: "NEW",
+                            videoId: videoId
+                        }).catch(err => {
+                            console.log('Content script still not ready');
+                        });
+                    }, 1000);
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Error in tab update listener:', error);
+    }
+});
+
+// Listen for extension installation
+chrome.runtime.onInstalled.addListener(() => {
+    try {
+        console.log('YTClipSaver extension installed');
+        
+        // Set default settings
+        chrome.storage.sync.set({
+            'extensionSettings': {
+                'version': '1.0',
+                'installedAt': Date.now()
+            }
+        });
+    } catch (error) {
+        console.error('Error during extension installation:', error);
+    }
+});
+
+// Handle extension action click (toolbar icon)
+chrome.action.onClicked.addListener(async (tab) => {
+    try {
+        // Only work on YouTube pages
         if (tab.url && tab.url.includes("youtube.com/watch")) {
-            // Extract video ID from URL parameters
-            const queryParameters = tab.url.split("?")[1];
-            if (!queryParameters) {
-                console.warn('No query parameters found in YouTube URL');
-                return;
+            console.log('Extension icon clicked on YouTube page');
+            
+            // Extract current video ID
+            const urlParams = new URLSearchParams(tab.url.split("?")[1]);
+            const videoId = urlParams.get("v");
+            
+            if (videoId) {
+                currentVideoId = videoId;
+                
+                // Send message to content script to refresh
+                chrome.tabs.sendMessage(tab.id, {
+                    type: "NEW",
+                    videoId: videoId
+                }).catch(error => {
+                    console.log('Content script not ready, opening popup instead');
+                });
             }
-
-            const urlParameters = new URLSearchParams(queryParameters);
-            const videoId = urlParameters.get("v");
-
-            if (!videoId) {
-                console.warn('No video ID found in YouTube URL');
-                return;
-            }
-
-            // Send message to content script with video ID
-            chrome.tabs.sendMessage(tabId, {
-                type: "NEW",
-                videoId: videoId,
-            }, (response) => {
-                // Handle any errors in message sending
-                if (chrome.runtime.lastError) {
-                    console.error('Error sending message to content script:', chrome.runtime.lastError);
-                }
-            });
         }
     } catch (error) {
-        console.error('Error handling tab update:', error);
+        console.error('Error handling extension action:', error);
     }
 });
 
-// Listen for extension installation/update
-chrome.runtime.onInstalled.addListener((details) => {
+// Listen for messages from content script and popup
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     try {
-        if (details.reason === 'install') {
-            console.log('YouTube Bookmark Extension installed');
-        } else if (details.reason === 'update') {
-            console.log('YouTube Bookmark Extension updated');
+        console.log('Background received message:', request);
+        
+        switch (request.type) {
+            case "GET_CURRENT_VIDEO":
+                sendResponse({ videoId: currentVideoId });
+                break;
+                
+            case "REFRESH_CONTENT_SCRIPT":
+                // Force content script refresh
+                chrome.scripting.executeScript({
+                    target: { tabId: sender.tab.id },
+                    files: ['contentScript.js']
+                }).then(() => {
+                    sendResponse({ success: true });
+                }).catch(error => {
+                    console.error('Error refreshing content script:', error);
+                    sendResponse({ success: false, error: error.message });
+                });
+                return true; // Keep message channel open
+                
+            default:
+                console.log('Unknown message type:', request.type);
         }
     } catch (error) {
-        console.error('Error handling extension install/update:', error);
-    }
-});
-
-// Handle extension icon click
-chrome.action.onClicked.addListener((tab) => {
-    try {
-        // This will open the popup automatically due to manifest configuration
-        console.log('Extension icon clicked');
-    } catch (error) {
-        console.error('Error handling extension icon click:', error);
+        console.error('Error handling message in background:', error);
     }
 });

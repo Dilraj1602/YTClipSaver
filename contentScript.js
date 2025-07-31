@@ -31,23 +31,46 @@
     // Message listener for communication with background and popup
     chrome.runtime.onMessage.addListener((obj, sender, response) => {
         try {
+            console.log('=== CONTENT SCRIPT RECEIVED MESSAGE ===');
+            console.log('Message object:', obj);
             const { type, value, videoId } = obj;
 
             switch (type) {
                 case "NEW":
+                    console.log('Processing NEW message with videoId:', videoId);
                     currentVideo = videoId;
                     newVideoLoaded();
                     break;
                 case "PLAY":
+                    console.log('=== PROCESSING PLAY MESSAGE ===');
+                    console.log('Received PLAY message with value:', value);
+                    console.log('youtubePlayer exists:', !!youtubePlayer);
+                    console.log('Value is valid number:', !isNaN(value));
+                    
                     if (youtubePlayer && !isNaN(value)) {
-                        youtubePlayer.currentTime = parseFloat(value);
+                        const timeToPlay = parseFloat(value);
+                        console.log('Setting video time to:', timeToPlay);
+                        youtubePlayer.currentTime = timeToPlay;
+                        console.log('Video time set successfully');
+                        response({ success: true });
+                    } else {
+                        console.error('Cannot play: youtubePlayer not found or invalid time value');
+                        response({ success: false, error: 'Player not found or invalid time' });
                     }
                     break;
                 case "DELETE":
-                    deleteBookmark(value);
-                    response(currentVideoBookmarks);
-                    break;
+                    console.log('=== PROCESSING DELETE MESSAGE ===');
+                    console.log('Received DELETE message with value:', value);
+                    deleteBookmark(value).then(updatedBookmarks => {
+                        console.log('Delete successful, returning updated bookmarks:', updatedBookmarks);
+                        response(updatedBookmarks);
+                    }).catch(error => {
+                        console.error('Error in delete operation:', error);
+                        response([]);
+                    });
+                    return true; // Keep message channel open for async response
                 case "GET_VIDEO_DATA":
+                    console.log('Processing GET_VIDEO_DATA message');
                     response(currentVideoData);
                     break;
                 default:
@@ -62,6 +85,13 @@
     const fetchBookmarks = async () => {
         try {
             return new Promise((resolve) => {
+                // Check if extension context is still valid
+                if (!chrome.runtime || !chrome.runtime.id) {
+                    console.error('Extension context invalidated');
+                    resolve([]);
+                    return;
+                }
+
                 chrome.storage.sync.get([currentVideo], (obj) => {
                     if (chrome.runtime.lastError) {
                         console.error('Storage error:', chrome.runtime.lastError);
@@ -102,14 +132,20 @@
     // Initialize bookmark button and video data
     const newVideoLoaded = async () => {
         try {
+            console.log('New video loaded, video ID:', currentVideo);
             const bookmarkBtnExists = document.getElementsByClassName("bookmark-btn")[0];
             currentVideoBookmarks = await fetchBookmarks();
+            console.log('Loaded bookmarks:', currentVideoBookmarks);
             
             // Get video data
             currentVideoData = getVideoData();
+            console.log('Video data:', currentVideoData);
 
             if (!bookmarkBtnExists) {
+                console.log('Creating bookmark button...');
                 createBookmarkButton();
+            } else {
+                console.log('Bookmark button already exists');
             }
         } catch (error) {
             console.error('Error loading new video:', error);
@@ -119,6 +155,7 @@
     // Create and add bookmark button to YouTube controls
     const createBookmarkButton = () => {
         try {
+            console.log('Creating bookmark button...');
             const bookmarkBtn = document.createElement("img");
             bookmarkBtn.src = chrome.runtime.getURL("assets/bookmark.png");
             bookmarkBtn.className = "ytp-button bookmark-btn";
@@ -128,9 +165,15 @@
             youtubeLeftControls = document.getElementsByClassName("ytp-left-controls")[0];
             youtubePlayer = document.getElementsByClassName("video-stream")[0];
 
+            console.log('YouTube elements found:', { 
+                youtubeLeftControls: !!youtubeLeftControls, 
+                youtubePlayer: !!youtubePlayer 
+            });
+
             if (youtubeLeftControls && youtubePlayer) {
                 youtubeLeftControls.appendChild(bookmarkBtn);
                 bookmarkBtn.addEventListener("click", addNewBookmarkEventHandler);
+                console.log('Bookmark button added successfully');
             } else {
                 console.warn('YouTube controls not found, retrying in 1 second...');
                 setTimeout(createBookmarkButton, 1000);
@@ -143,9 +186,12 @@
     // Create modal for custom bookmark description
     const createBookmarkModal = (currentTime) => {
         try {
+            console.log('Creating bookmark modal for time:', currentTime);
+            
             // Remove existing modal if any
             const existingModal = document.getElementById('bookmark-modal');
             if (existingModal) {
+                console.log('Removing existing modal');
                 existingModal.remove();
             }
 
@@ -223,7 +269,10 @@
                 border-radius: 5px;
                 cursor: pointer;
             `;
-            saveBtn.onclick = () => saveBookmark(currentTime, input.value.trim());
+            saveBtn.onclick = () => {
+                console.log('Save button clicked, description:', input.value.trim());
+                saveBookmark(currentTime, input.value.trim());
+            };
 
             buttonContainer.appendChild(cancelBtn);
             buttonContainer.appendChild(saveBtn);
@@ -237,10 +286,12 @@
             document.body.appendChild(modal);
             input.focus();
             isBookmarkModalOpen = true;
+            console.log('Modal created and displayed');
 
             // Handle Enter key
             input.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
+                    console.log('Enter key pressed, saving bookmark');
                     saveBookmark(currentTime, input.value.trim());
                 }
             });
@@ -266,52 +317,118 @@
     // Save bookmark with custom description
     const saveBookmark = async (currentTime, description) => {
         try {
+            console.log('Saving bookmark:', { currentTime, description, currentVideo });
+            
+            // Check if extension context is still valid
+            if (!chrome.runtime || !chrome.runtime.id) {
+                console.error('Extension context invalidated during save');
+                showContextLostError();
+                return;
+            }
+            
             const newBookmark = {
                 time: currentTime,
                 desc: description || `Bookmark at ${getTime(currentTime)}`,
                 timestamp: Date.now()
             };
+            console.log('New bookmark object:', newBookmark);
 
             currentVideoBookmarks = await fetchBookmarks();
+            console.log('Current bookmarks before adding:', currentVideoBookmarks);
+            
             currentVideoBookmarks.push(newBookmark);
             currentVideoBookmarks.sort((a, b) => a.time - b.time);
+            console.log('Bookmarks after adding:', currentVideoBookmarks);
 
-            await new Promise((resolve, reject) => {
-                chrome.storage.sync.set({
-                    [currentVideo]: JSON.stringify(currentVideoBookmarks)
-                }, () => {
-                    if (chrome.runtime.lastError) {
-                        reject(chrome.runtime.lastError);
-                    } else {
-                        resolve();
+            // Retry mechanism for storage operations
+            let retryCount = 0;
+            const maxRetries = 3;
+            
+            while (retryCount < maxRetries) {
+                try {
+                    await new Promise((resolve, reject) => {
+                        // Check if extension context is still valid before saving
+                        if (!chrome.runtime || !chrome.runtime.id) {
+                            reject(new Error('Extension context invalidated'));
+                            return;
+                        }
+
+                        chrome.storage.sync.set({
+                            [currentVideo]: JSON.stringify(currentVideoBookmarks)
+                        }, () => {
+                            if (chrome.runtime.lastError) {
+                                console.error('Storage error:', chrome.runtime.lastError);
+                                reject(chrome.runtime.lastError);
+                            } else {
+                                console.log('Bookmark saved successfully to storage');
+                                resolve();
+                            }
+                        });
+                    });
+                    
+                    // If we get here, save was successful
+                    break;
+                } catch (error) {
+                    retryCount++;
+                    console.log(`Save attempt ${retryCount} failed:`, error);
+                    
+                    if (retryCount >= maxRetries) {
+                        throw error;
                     }
-                });
-            });
+                    
+                    // Wait a bit before retrying
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
 
             closeBookmarkModal();
             showNotification('Bookmark saved successfully!', 'success');
         } catch (error) {
             console.error('Error saving bookmark:', error);
-            showNotification('Failed to save bookmark', 'error');
+            if (error.message.includes('Extension context invalidated')) {
+                showContextLostError();
+            } else {
+                showNotification('Failed to save bookmark', 'error');
+            }
         }
     };
 
     // Delete bookmark
     const deleteBookmark = async (timeToDelete) => {
         try {
+            console.log('Deleting bookmark at time:', timeToDelete);
+            
+            // Check if extension context is still valid
+            if (!chrome.runtime || !chrome.runtime.id) {
+                console.error('Extension context invalidated during delete');
+                throw new Error('Extension context invalidated');
+            }
+            
             currentVideoBookmarks = currentVideoBookmarks.filter((b) => b.time != timeToDelete);
             
             await new Promise((resolve, reject) => {
+                // Check if extension context is still valid before saving
+                if (!chrome.runtime || !chrome.runtime.id) {
+                    reject(new Error('Extension context invalidated'));
+                    return;
+                }
+
                 chrome.storage.sync.set({ [currentVideo]: JSON.stringify(currentVideoBookmarks) }, () => {
                     if (chrome.runtime.lastError) {
+                        console.error('Storage error during delete:', chrome.runtime.lastError);
                         reject(chrome.runtime.lastError);
                     } else {
+                        console.log('Bookmark deleted successfully, updated array:', currentVideoBookmarks);
                         resolve();
                     }
                 });
             });
+            
+            // Return the updated bookmarks array
+            return currentVideoBookmarks;
         } catch (error) {
             console.error('Error deleting bookmark:', error);
+            throw error;
         }
     };
 
@@ -356,17 +473,23 @@
     // Bookmark event handler
     const addNewBookmarkEventHandler = () => {
         try {
+            console.log('Bookmark button clicked!');
             if (!youtubePlayer) {
+                console.error('Video player not found');
                 showNotification('Video player not found', 'error');
                 return;
             }
 
             const currentTime = youtubePlayer.currentTime;
+            console.log('Current video time:', currentTime);
+            
             if (currentTime <= 0) {
+                console.error('Cannot bookmark at 0 seconds');
                 showNotification('Cannot bookmark at 0 seconds', 'error');
                 return;
             }
 
+            console.log('Creating bookmark modal for time:', currentTime);
             createBookmarkModal(currentTime);
         } catch (error) {
             console.error('Error adding bookmark:', error);
@@ -402,11 +525,200 @@
         document.head.appendChild(style);
     };
 
+    // Check if extension is properly loaded
+    const isExtensionValid = () => {
+        return chrome.runtime && chrome.runtime.id;
+    };
+
+    // Show user-friendly error when context is lost
+    const showContextLostError = () => {
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            background: #f44336;
+            color: white;
+            border-radius: 8px;
+            font-weight: bold;
+            z-index: 10001;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            max-width: 300px;
+            font-size: 14px;
+        `;
+        notification.innerHTML = `
+            <div style="margin-bottom: 8px;">⚠️ Extension Connection Lost</div>
+            <div style="font-size: 12px; opacity: 0.9;">
+                Please refresh this page to restore functionality.
+            </div>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Remove after 8 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.remove();
+            }
+        }, 8000);
+    };
+
+    // Attempt to recover extension context
+    const attemptContextRecovery = async () => {
+        try {
+            console.log('Attempting to recover extension context...');
+            
+            // Try to communicate with background script
+            const response = await new Promise((resolve) => {
+                chrome.runtime.sendMessage({ type: "GET_CURRENT_VIDEO" }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        resolve(null);
+                    } else {
+                        resolve(response);
+                    }
+                });
+            });
+            
+            if (response && response.videoId) {
+                console.log('Context recovered, reinitializing...');
+                currentVideo = response.videoId;
+                await newVideoLoaded();
+                return true;
+            } else {
+                console.log('Context recovery failed');
+                showContextLostError();
+                return false;
+            }
+        } catch (error) {
+            console.error('Error during context recovery:', error);
+            showContextLostError();
+            return false;
+        }
+    };
+
+    // Test function to verify extension is working
+    const testExtension = () => {
+        console.log('=== TESTING EXTENSION ===');
+        console.log('Current video ID:', currentVideo);
+        console.log('YouTube elements:', {
+            youtubeLeftControls: !!youtubeLeftControls,
+            youtubePlayer: !!youtubePlayer
+        });
+        console.log('Current bookmarks:', currentVideoBookmarks);
+        console.log('Video data:', currentVideoData);
+        console.log('Modal open:', isBookmarkModalOpen);
+    };
+
+    // Add test function to window for debugging
+    window.testExtension = testExtension;
+    
+    // Add global test function that can be called from main page
+    window.testYTBookmarkExtension = () => {
+        console.log('=== YT BOOKMARK EXTENSION TEST ===');
+        console.log('Extension loaded:', !!chrome.runtime);
+        console.log('Extension ID:', chrome.runtime?.id);
+        console.log('Current video ID:', currentVideo);
+        console.log('YouTube elements found:', {
+            youtubeLeftControls: !!youtubeLeftControls,
+            youtubePlayer: !!youtubePlayer
+        });
+        console.log('Current bookmarks:', currentVideoBookmarks);
+        console.log('Video data:', currentVideoData);
+        console.log('Modal open:', isBookmarkModalOpen);
+        
+        // Test if bookmark button exists
+        const bookmarkBtn = document.querySelector('.bookmark-btn');
+        console.log('Bookmark button exists:', !!bookmarkBtn);
+        
+        // Test if we can access storage
+        if (chrome.runtime && chrome.runtime.id) {
+            chrome.storage.sync.get([currentVideo], (data) => {
+                console.log('Storage test - current video data:', data);
+            });
+        }
+        
+        return {
+            extensionLoaded: !!chrome.runtime,
+            videoId: currentVideo,
+            bookmarkButtonExists: !!bookmarkBtn,
+            youtubeElementsFound: {
+                controls: !!youtubeLeftControls,
+                player: !!youtubePlayer
+            },
+            bookmarksCount: currentVideoBookmarks.length
+        };
+    };
+
+    // Add manual test function
+    window.testBookmarkCreation = () => {
+        console.log('=== TESTING BOOKMARK CREATION ===');
+        
+        if (!youtubePlayer) {
+            console.error('YouTube player not found');
+            return false;
+        }
+        
+        const currentTime = youtubePlayer.currentTime;
+        console.log('Current video time:', currentTime);
+        
+        if (currentTime <= 0) {
+            console.error('Cannot bookmark at 0 seconds');
+            return false;
+        }
+        
+        console.log('Creating test bookmark...');
+        createBookmarkModal(currentTime);
+        return true;
+    };
+
+    // Add context recovery test function
+    window.testContextRecovery = () => {
+        console.log('=== TESTING CONTEXT RECOVERY ===');
+        return attemptContextRecovery();
+    };
+
+    // Add force refresh function
+    window.forceExtensionRefresh = () => {
+        console.log('=== FORCING EXTENSION REFRESH ===');
+        if (chrome.runtime && chrome.runtime.id) {
+            chrome.runtime.sendMessage({ type: "REFRESH_CONTENT_SCRIPT" }, (response) => {
+                console.log('Refresh response:', response);
+            });
+        } else {
+            console.error('Extension context not available');
+        }
+    };
+
     // Initialize extension
     const init = () => {
         try {
+            // Check if extension is valid before initializing
+            if (!isExtensionValid()) {
+                console.error('Extension context not available');
+                showContextLostError();
+                return;
+            }
+            
             addStyles();
             newVideoLoaded();
+            
+            // Set up periodic checks for extension validity
+            setInterval(() => {
+                if (!isExtensionValid()) {
+                    console.log('Extension context lost, attempting to reinitialize...');
+                    attemptContextRecovery();
+                }
+            }, 5000); // Check every 5 seconds
+            
+            // Also check on page visibility change (YouTube navigation)
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden && !isExtensionValid()) {
+                    console.log('Page became visible, checking extension context...');
+                    attemptContextRecovery();
+                }
+            });
+            
         } catch (error) {
             console.error('Error initializing extension:', error);
         }

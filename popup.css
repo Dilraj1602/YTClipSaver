@@ -1,54 +1,366 @@
+/* Main container styling */
 .container {
-  width: 280px;
-  color: #314d3e;
+  width: 380px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #2c3e50;
+  border-radius: 15px;
+  padding: 0;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  overflow: hidden;
 }
 
-.title {
-  font-size: 14px;
-  font-weight: bold;
-  padding: 8px;
+/* Video information section */
+.video-info {
+  background: rgba(255, 255, 255, 0.95);
+  padding: 15px 20px;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.3);
 }
 
-.textbox {
-  width: 100%;
+.video-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 8px;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.video-stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   font-size: 12px;
+  color: #7f8c8d;
+}
+
+.bookmark-count {
+  background: #3498db;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+.video-duration {
+  color: #95a5a6;
+}
+
+/* Controls section */
+.controls-section {
+  background: rgba(255, 255, 255, 0.9);
+  padding: 15px 20px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.search-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 20px;
+  font-size: 13px;
+  background: white;
+  transition: all 0.3s ease;
+  outline: none;
+}
+
+.search-input:focus {
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.filter-select,
+.sort-select {
+  padding: 6px 10px;
+  border: 2px solid #e0e0e0;
+  border-radius: 15px;
+  font-size: 12px;
+  background: white;
+  color: #2c3e50;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  outline: none;
+}
+
+.filter-select:focus,
+.sort-select:focus {
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
+}
+
+/* Title styling */
+.title {
+  font-size: 18px;
+  font-weight: 700;
+  padding: 20px;
+  text-align: center;
+  color: white;
+  background: rgba(0, 0, 0, 0.1);
   margin: 0;
-  padding: 0px 2px;
 }
 
-.textbox:focus {
-  outline: 0;
-  border-color: #66afe9;
-}
-
+/* Bookmarks container */
 .bookmarks {
-  margin: 5px 5px;
-  padding: 3px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 15px 20px;
+  background: rgba(255, 255, 255, 0.95);
 }
 
+/* Scrollbar styling */
+.bookmarks::-webkit-scrollbar {
+  width: 6px;
+}
+
+.bookmarks::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+}
+
+.bookmarks::-webkit-scrollbar-thumb {
+  background: rgba(52, 152, 219, 0.5);
+  border-radius: 3px;
+}
+
+.bookmarks::-webkit-scrollbar-thumb:hover {
+  background: rgba(52, 152, 219, 0.7);
+}
+
+/* Bookmark item styling */
 .bookmark {
   display: flex;
-  border-bottom-color: #00254d;
-  border-bottom-width: 1px;
-  border-bottom-style: solid;
-  border-radius: 0.8rem;
-  padding: 3px;
-  padding-bottom: 7px;
-  margin-bottom: 7px;
+  align-items: center;
+  justify-content: space-between;
+  background: white;
+  border-left: 4px solid #3498db;
+  border-radius: 10px;
+  padding: 12px 15px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
 }
 
-.bookmark-title {
-  padding-left: 2px;
+.bookmark::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, transparent, rgba(52, 152, 219, 0.05));
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 
-.bookmark-controls img {
-  margin: 0 4px;
-  width: 18px;
-  height: 18px;
-  cursor: pointer;
+.bookmark:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+}
+
+.bookmark:hover::before {
+  opacity: 1;
+}
+
+.bookmark-content {
+  flex: 1;
+  margin-right: 15px;
+}
+
+.bookmark-time {
+  font-size: 14px;
+  font-weight: 600;
+  color: #3498db;
+  margin-bottom: 4px;
+  font-family: 'Courier New', monospace;
+}
+
+.bookmark-description {
+  font-size: 13px;
+  color: #2c3e50;
+  line-height: 1.4;
+  margin-bottom: 4px;
+  word-wrap: break-word;
+}
+
+.bookmark-date {
+  font-size: 11px;
+  color: #95a5a6;
+  font-style: italic;
 }
 
 .bookmark-controls {
-  flex: auto;
-  text-align: right;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.control-btn {
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 2px;
+  border-radius: 4px;
+}
+
+.control-btn:hover {
+  transform: scale(1.1);
+  background: rgba(52, 152, 219, 0.1);
+}
+
+.play-btn:hover {
+  background: rgba(46, 204, 113, 0.1);
+}
+
+.edit-btn:hover {
+  background: rgba(241, 196, 15, 0.1);
+}
+
+.delete-btn:hover {
+  background: rgba(231, 76, 60, 0.1);
+}
+
+/* No bookmarks message */
+.no-bookmarks {
+  text-align: center;
+  padding: 30px 20px;
+  color: #7f8c8d;
+  font-style: italic;
+  font-size: 14px;
+}
+
+/* Error message */
+.error-message {
+  text-align: center;
+  padding: 20px;
+  color: #e74c3c;
+  font-weight: 500;
+  background: rgba(231, 76, 60, 0.1);
+  border-radius: 8px;
+  margin: 15px;
+}
+
+/* Not YouTube page message */
+.not-youtube {
+  text-align: center;
+  padding: 30px 20px;
+  color: white;
+}
+
+.not-youtube .title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.not-youtube .subtitle {
+  font-size: 13px;
+  opacity: 0.8;
+  line-height: 1.4;
+}
+
+/* Loading state */
+.loading {
+  text-align: center;
+  padding: 30px 20px;
+  color: #7f8c8d;
+}
+
+.loading::after {
+  content: '';
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #3498db;
+  border-radius: 50%;
+  border-top-color: transparent;
+  animation: spin 1s linear infinite;
+  margin-left: 10px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive design */
+@media (max-width: 400px) {
+  .container {
+    width: 350px;
+  }
+  
+  .controls-section {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .search-input {
+    width: 100%;
+  }
+  
+  .filter-select,
+  .sort-select {
+    width: 100%;
+  }
+}
+
+/* Animation for new bookmarks */
+.bookmark {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Focus styles for accessibility */
+.search-input:focus,
+.filter-select:focus,
+.sort-select:focus,
+.control-btn:focus {
+  outline: 2px solid #3498db;
+  outline-offset: 2px;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .container {
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+  }
+  
+  .video-info,
+  .controls-section,
+  .bookmarks {
+    background: rgba(44, 62, 80, 0.95);
+    color: #ecf0f1;
+  }
+  
+  .bookmark {
+    background: rgba(52, 73, 94, 0.9);
+    color: #ecf0f1;
+  }
+  
+  .search-input,
+  .filter-select,
+  .sort-select {
+    background: rgba(52, 73, 94, 0.9);
+    color: #ecf0f1;
+    border-color: #7f8c8d;
+  }
 }
